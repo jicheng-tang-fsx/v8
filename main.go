@@ -83,7 +83,7 @@ func getAllJnetConfirmedOrder(filename string) ([]JnetConfirmedOrder, error) {
 		}
 	}
 
-	fmt.Println("count: ", count)
+	fmt.Println("JNET Correction Order Count: ", count)
 
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("error reading file: %v", err)
@@ -217,14 +217,33 @@ func exportCsv(orders []JnetConfirmedOrder, csvFilename string) error {
 }
 
 func main() {
-	filename := "/Users/tangjicheng/work/oms-log-parser/oms_20240407.log"
-	orders, err := getAllJnetConfirmedOrder(filename)
+	if len(os.Args) < 3 {
+		fmt.Println("Usage: <program> <logFilePath> <outputCsvPath>")
+		return
+	}
+	logFilePath := os.Args[1]
+	outputCsvPath := os.Args[2]
+
+	orders, err := getAllJnetConfirmedOrder(logFilePath)
 	if err != nil {
-		fmt.Printf("%v\n", err)
+		fmt.Printf("Error getting orders: %v\n", err)
 		return
 	}
 
-	fillSendTime(orders, filename)
-	fillCostTime(orders)
-	exportCsv(orders, "./day.csv")
+	if fillSendTime(orders, logFilePath) != nil {
+		fmt.Printf("Error filling send time: %v\n", err)
+		return
+	}
+
+	if fillCostTime(orders) != nil {
+		fmt.Printf("Error filling cost time: %v\n", err)
+		return
+	}
+
+	if exportCsv(orders, outputCsvPath) != nil {
+		fmt.Printf("Error exporting to CSV: %v\n", err)
+		return
+	}
+
+	fmt.Println("Orders exported successfully to", outputCsvPath)
 }
