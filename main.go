@@ -12,14 +12,9 @@ import (
 	"time"
 )
 
-var reMsgEx, reMsgCorrect, reMsgFill, reMsgFix *regexp.Regexp
 var reTime, reClOrderId *regexp.Regexp
 
 func init() {
-	reMsgEx, _ = regexp.Compile(`\|35=8\|`)
-	reMsgCorrect, _ = regexp.Compile(`\|20=2\|`)
-	reMsgFill, _ = regexp.Compile(`\|39=2\|`)
-	reMsgFix, _ = regexp.Compile(`8=FIX`)
 	reTime = regexp.MustCompile(`^D\d{4} (\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}\.\d{6})`)
 	reClOrderId = regexp.MustCompile(`\|11=([^|]+)\|`)
 }
@@ -32,7 +27,7 @@ type JnetConfirmedOrder struct {
 }
 
 func isJnetConfirmed(line string) bool {
-	if reMsgEx.MatchString(line) && reMsgCorrect.MatchString(line) && reMsgFill.MatchString(line) && reMsgFix.MatchString(line) {
+	if strings.Contains(line, "|35=8|") && strings.Contains(line, "|20=2|") && strings.Contains(line, "|39=2|") && strings.Contains(line, "8=FIX") {
 		return true
 	}
 	return false
