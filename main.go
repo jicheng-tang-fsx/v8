@@ -53,14 +53,14 @@ func parseLine(line string) (JnetConfirmedOrder, error) {
 	return order, nil
 }
 
-func getAllJnetConfirmedOrder(filename string) ([]JnetConfirmedOrder, error) {
+func getAllJnetConfirmedOrder(filename string) (map[string]JnetConfirmedOrder, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("error opening file: %v", err)
 	}
 	defer file.Close()
 
-	var orders []JnetConfirmedOrder
+	orders := make(map[string]JnetConfirmedOrder)
 	scanner := bufio.NewScanner(file)
 
 	count := 0
@@ -74,7 +74,7 @@ func getAllJnetConfirmedOrder(filename string) ([]JnetConfirmedOrder, error) {
 				fmt.Printf("parse error: %v\n", err)
 				continue // 解析错误时跳过该行
 			}
-			orders = append(orders, order)
+			orders[order.ClOrderId] = order
 		}
 	}
 
@@ -87,7 +87,7 @@ func getAllJnetConfirmedOrder(filename string) ([]JnetConfirmedOrder, error) {
 	return orders, nil
 }
 
-func exportToJsonl(orders []JnetConfirmedOrder, jsonlFilename string) error {
+func exportToJsonl(orders map[string]JnetConfirmedOrder, jsonlFilename string) error {
 	file, err := os.Create(jsonlFilename)
 	if err != nil {
 		return fmt.Errorf("error creating file: %v", err)
@@ -113,7 +113,7 @@ func exportToJsonl(orders []JnetConfirmedOrder, jsonlFilename string) error {
 	return nil
 }
 
-func fillSendTime(orders []JnetConfirmedOrder, filename string) error {
+func fillSendTime(orders map[string]JnetConfirmedOrder, filename string) error {
 	// 打开文件
 	file, err := os.Open(filename)
 	if err != nil {
@@ -124,16 +124,16 @@ func fillSendTime(orders []JnetConfirmedOrder, filename string) error {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.Replace(scanner.Text(), "\x01", "|", -1)
-		// 检查每个订单
-		for i, order := range orders {
-			if order.RecvTime == "" && strings.Contains(line, fmt.Sprintf("|11=%s|", order.ClOrderId)) && strings.Contains(line, "|35=D|") && strings.Contains(line, "8=FIX") {
-				// 匹配到订单ID，尝试提取时间
-				timeMatches := reTime.FindStringSubmatch(line)
-				if len(timeMatches) > 1 {
-					// 更新RecvTime
-					orders[i].RecvTime = timeMatches[1]
+		if strings.Contains(line, "|35=D|") && strings.Contains(line, "8=FIX") {
+			clOrderIdMatches := reClOrderId.FindStringSubmatch(line)
+			recvTimeMatches := reTime.FindStringSubmatch(line)
+			if len(clOrderIdMatches) > 1 && len(recvTimeMatches) > 1 {
+				order, exists := orders[clOrderIdMatches[1]]
+				if exists && order.RecvTime == "" {
+					// 修改结构体字段
+					order.RecvTime = recvTimeMatches[1]
+					orders[clOrderIdMatches[1]] = order
 				}
-				break
 			}
 		}
 	}
@@ -146,7 +146,7 @@ func fillSendTime(orders []JnetConfirmedOrder, filename string) error {
 	return nil
 }
 
-func fillCostTime(orders []JnetConfirmedOrder) error {
+func fillCostTime(orders map[string]JnetConfirmedOrder) error {
 	// 定义时间字符串的解析格式
 	const layout = "01/02/2006 15:04:05.000000" // 注意Go中月份和日的位置是固定的
 
@@ -166,14 +166,17 @@ func fillCostTime(orders []JnetConfirmedOrder) error {
 		// 计算差值（以秒为单位）
 		duration := returnTime.Sub(recvTime).Seconds()
 
-		// 更新CostTime
-		orders[i].CostTime = fmt.Sprintf("%.6f", duration) // 保留六位小数，与原时间字符串格式一致
+		if order, exists := orders[i]; exists {
+			// 修改结构体字段
+			order.CostTime = fmt.Sprintf("%.6f", duration)
+			orders[i] = order
+		}
 	}
 
 	return nil
 }
 
-func exportCsv(orders []JnetConfirmedOrder, csvFilename string) error {
+func exportCsv(orders map[string]JnetConfirmedOrder, csvFilename string) error {
 	file, err := os.Create(csvFilename)
 	if err != nil {
 		return fmt.Errorf("error creating CSV file: %v", err)
