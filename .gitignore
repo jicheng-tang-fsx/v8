@@ -1,4 +1,5 @@
 *.log
 *.jsonl
 *.csv
+*.tar.gz
 v8
