@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -190,7 +191,19 @@ func exportCsv(orders map[string]JnetConfirmedOrder, csvFilename string) error {
 		return fmt.Errorf("error writing header to CSV file: %v", err)
 	}
 
+	// 创建切片用于排序
+	orderSlice := make([]JnetConfirmedOrder, 0, len(orders))
 	for _, order := range orders {
+		orderSlice = append(orderSlice, order)
+	}
+
+	// 根据RecvTime排序订单
+	sort.Slice(orderSlice, func(i, j int) bool {
+		return orderSlice[i].RecvTime < orderSlice[j].RecvTime
+	})
+
+	// 遍历已排序的订单切片来导出CSV
+	for _, order := range orderSlice {
 		costTimeSeconds, err := strconv.ParseFloat(order.CostTime, 64)
 		if err != nil {
 			return fmt.Errorf("error parsing CostTime to float: %v", err)
