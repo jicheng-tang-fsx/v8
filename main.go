@@ -241,7 +241,7 @@ func exportCsv(orders map[string]JnetConfirmedOrder, csvFilename string) error {
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	if err := writer.Write([]string{"ClientOrderID", "CostMillisecond"}); err != nil {
+	if err := writer.Write([]string{"ClientOrderID", "OmsCostTime1", "MatchCostTime", "OmsCostTime2", "TotalCostTime"}); err != nil {
 		return fmt.Errorf("error writing header to CSV file: %v", err)
 	}
 
@@ -256,18 +256,28 @@ func exportCsv(orders map[string]JnetConfirmedOrder, csvFilename string) error {
 		return orderSlice[i].RecvClientTime < orderSlice[j].RecvClientTime
 	})
 
-	// 遍历已排序的订单切片来导出CSV
+	// 假设writer是已经被初始化的csv.Writer
 	for _, order := range orderSlice {
-		costTimeSeconds, err := strconv.ParseFloat(order.TotalCostTime, 64)
-		if err != nil {
-			return fmt.Errorf("error parsing TotalCostTime to float: %v", err)
+		// 准备要写入CSV的记录
+		record := []string{order.ClOrderId}
+
+		// 需要转换和格式化的字段
+		timeFields := []string{order.OmsCostTime1, order.MatchCostTime, order.OmsCostTime2, order.TotalCostTime}
+
+		// 遍历每个时间字段进行处理
+		for _, field := range timeFields {
+			costTimeSeconds, err := strconv.ParseFloat(field, 64)
+			if err != nil {
+				return fmt.Errorf("error parsing time field to float: %v", err)
+			}
+			// 将秒转换为毫秒并格式化为字符串
+			costTimeMilliseconds := fmt.Sprintf("%.3f", costTimeSeconds*1000)
+			// 将处理后的时间添加到记录中
+			record = append(record, costTimeMilliseconds)
 		}
 
-		// 将秒转换为毫秒并格式化为字符串
-		costTimeMilliseconds := fmt.Sprintf("%.3f", costTimeSeconds*1000)
-
 		// 写入一行CSV数据
-		if err := writer.Write([]string{order.ClOrderId, costTimeMilliseconds}); err != nil {
+		if err := writer.Write(record); err != nil {
 			return fmt.Errorf("error writing record to CSV file: %v", err)
 		}
 	}
@@ -300,10 +310,10 @@ func main() {
 		return
 	}
 
-	if exportToJsonl(orders, "t1.jsonl") != nil {
-		fmt.Printf("Error exportToJsonl: %v\n", err)
-		return
-	}
+	// if exportToJsonl(orders, "t1.jsonl") != nil {
+	// 	fmt.Printf("Error exportToJsonl: %v\n", err)
+	// 	return
+	// }
 
 	if fillCostTime(orders) != nil {
 		fmt.Printf("Error filling cost time: %v\n", err)
