@@ -35,7 +35,7 @@ def plot_cost_millisecond(csv_file):
     
     # 保存图像为JPG，文件名与CSV文件同名
     output_file = csv_file.rsplit('.', 1)[0] + '.jpg'
-    plt.savefig(output_file, format='jpg', dpi=150)
+    plt.savefig(output_file, format='jpg', dpi=1000)
     plt.close()
     print(f'Plot saved as {output_file}')
 
