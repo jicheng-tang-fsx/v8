@@ -22,12 +22,12 @@ func init() {
 }
 
 type JnetConfirmedOrder struct {
-	ClOrderId     string
-	RecvTime      string
-	ReturnTime    string
-	SendMatchTime string
-	RecvMatchTime string
-	CostTime      string
+	ClOrderId      string
+	RecvClientTime string
+	SendMatchTime  string
+	RecvMatchTime  string
+	ReturnTime     string
+	CostTime       string
 }
 
 func isJnetConfirmed(line string) bool {
@@ -133,16 +133,40 @@ func fillSendTime(orders map[string]JnetConfirmedOrder, filename string) error {
 			recvTimeMatches := reTime.FindStringSubmatch(line)
 			if len(clOrderIdMatches) > 1 && len(recvTimeMatches) > 1 {
 				order, exists := orders[clOrderIdMatches[1]]
-				if exists && order.RecvTime == "" {
+				if exists && order.RecvClientTime == "" {
 					// 修改结构体字段
-					order.RecvTime = recvTimeMatches[1]
+					order.RecvClientTime = recvTimeMatches[1]
 					orders[clOrderIdMatches[1]] = order
 				}
 			}
 		}
-		if strings.Contains(line, "|35=D|") && strings.Contains(line, "|49=router_branch|") && strings.Contains(line, "|56=router_branch|") {
-			
+
+		if strings.Contains(line, "|35=D|") && strings.Contains(line, "|49=router_branch|") && strings.Contains(line, "|56=exch_sim|") {
+			matchOrderIDResults := reMatchOrderID.FindStringSubmatch(line)
+			timeMatches := reTime.FindStringSubmatch(line)
+			if len(matchOrderIDResults) > 1 && len(timeMatches) > 1 {
+				order, exists := orders[matchOrderIDResults[1]]
+				if exists && order.RecvClientTime == "" {
+					// 修改结构体字段
+					order.SendMatchTime = timeMatches[1]
+					orders[matchOrderIDResults[1]] = order
+				}
+			}
 		}
+
+		if strings.Contains(line, "|150=G|") && strings.Contains(line, "|49=exch_sim|") && strings.Contains(line, "|56=router_branch|") {
+			matchOrderIDResults := reMatchOrderID.FindStringSubmatch(line)
+			timeMatches := reTime.FindStringSubmatch(line)
+			if len(matchOrderIDResults) > 1 && len(timeMatches) > 1 {
+				order, exists := orders[matchOrderIDResults[1]]
+				if exists && order.RecvClientTime == "" {
+					// 修改结构体字段
+					order.RecvMatchTime = timeMatches[1]
+					orders[matchOrderIDResults[1]] = order
+				}
+			}
+		}
+
 	}
 
 	// 检查扫描过程中的错误
@@ -159,9 +183,9 @@ func fillCostTime(orders map[string]JnetConfirmedOrder) error {
 
 	for i, order := range orders {
 		// 解析RecvTime
-		recvTime, err := time.Parse(layout, order.RecvTime)
+		recvTime, err := time.Parse(layout, order.RecvClientTime)
 		if err != nil {
-			return fmt.Errorf("error parsing RecvTime for order %s: %v", order.ClOrderId, err)
+			return fmt.Errorf("error parsing RecvClientTime for order %s: %v", order.ClOrderId, err)
 		}
 
 		// 解析ReturnTime
@@ -205,7 +229,7 @@ func exportCsv(orders map[string]JnetConfirmedOrder, csvFilename string) error {
 
 	// 根据RecvTime排序订单
 	sort.Slice(orderSlice, func(i, j int) bool {
-		return orderSlice[i].RecvTime < orderSlice[j].RecvTime
+		return orderSlice[i].RecvClientTime < orderSlice[j].RecvClientTime
 	})
 
 	// 遍历已排序的订单切片来导出CSV
