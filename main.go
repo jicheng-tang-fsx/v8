@@ -22,12 +22,17 @@ func init() {
 }
 
 type JnetConfirmedOrder struct {
-	ClOrderId      string
-	RecvClientTime string
-	SendMatchTime  string
-	RecvMatchTime  string
-	ReturnTime     string
-	CostTime       string
+	ClOrderId       string
+	RecvClientTime  string
+	SendMatchTime   string
+	RecvMatchTime   string
+	FinalReturnTime string
+
+	OmsCostTime1  string
+	MatchCostTime string
+	OmsCostTime2  string
+
+	TotalCostTime string
 }
 
 func isJnetConfirmed(line string) bool {
@@ -44,9 +49,9 @@ func parseLine(line string) (JnetConfirmedOrder, error) {
 	order := JnetConfirmedOrder{}
 
 	if len(returnTimeMatches) > 1 {
-		order.ReturnTime = returnTimeMatches[1]
+		order.FinalReturnTime = returnTimeMatches[1]
 	} else {
-		return JnetConfirmedOrder{}, fmt.Errorf("ReturnTime not found")
+		return JnetConfirmedOrder{}, fmt.Errorf("FinalReturnTime not found")
 	}
 	if len(clOrderIdMatches) > 1 {
 		order.ClOrderId = clOrderIdMatches[1]
@@ -189,9 +194,9 @@ func fillCostTime(orders map[string]JnetConfirmedOrder) error {
 		}
 
 		// 解析ReturnTime
-		returnTime, err := time.Parse(layout, order.ReturnTime)
+		returnTime, err := time.Parse(layout, order.FinalReturnTime)
 		if err != nil {
-			return fmt.Errorf("error parsing ReturnTime for order %s: %v", order.ClOrderId, err)
+			return fmt.Errorf("error parsing FinalReturnTime for order %s: %v", order.ClOrderId, err)
 		}
 
 		// 计算差值（以秒为单位）
@@ -199,7 +204,7 @@ func fillCostTime(orders map[string]JnetConfirmedOrder) error {
 
 		if order, exists := orders[i]; exists {
 			// 修改结构体字段
-			order.CostTime = fmt.Sprintf("%.6f", duration)
+			order.TotalCostTime = fmt.Sprintf("%.6f", duration)
 			orders[i] = order
 		}
 	}
@@ -234,9 +239,9 @@ func exportCsv(orders map[string]JnetConfirmedOrder, csvFilename string) error {
 
 	// 遍历已排序的订单切片来导出CSV
 	for _, order := range orderSlice {
-		costTimeSeconds, err := strconv.ParseFloat(order.CostTime, 64)
+		costTimeSeconds, err := strconv.ParseFloat(order.TotalCostTime, 64)
 		if err != nil {
-			return fmt.Errorf("error parsing CostTime to float: %v", err)
+			return fmt.Errorf("error parsing TotalCostTime to float: %v", err)
 		}
 
 		// 将秒转换为毫秒并格式化为字符串
