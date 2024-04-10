@@ -151,7 +151,7 @@ func fillSendTime(orders map[string]JnetConfirmedOrder, filename string) error {
 			timeMatches := reTime.FindStringSubmatch(line)
 			if len(matchOrderIDResults) > 1 && len(timeMatches) > 1 {
 				order, exists := orders[matchOrderIDResults[1]]
-				if exists && order.RecvClientTime == "" {
+				if exists && order.SendMatchTime == "" {
 					// 修改结构体字段
 					order.SendMatchTime = timeMatches[1]
 					orders[matchOrderIDResults[1]] = order
@@ -164,7 +164,7 @@ func fillSendTime(orders map[string]JnetConfirmedOrder, filename string) error {
 			timeMatches := reTime.FindStringSubmatch(line)
 			if len(matchOrderIDResults) > 1 && len(timeMatches) > 1 {
 				order, exists := orders[matchOrderIDResults[1]]
-				if exists && order.RecvClientTime == "" {
+				if exists && order.RecvMatchTime == "" {
 					// 修改结构体字段
 					order.RecvMatchTime = timeMatches[1]
 					orders[matchOrderIDResults[1]] = order
@@ -187,26 +187,45 @@ func fillCostTime(orders map[string]JnetConfirmedOrder) error {
 	const layout = "01/02/2006 15:04:05.000000" // 注意Go中月份和日的位置是固定的
 
 	for i, order := range orders {
-		// 解析RecvTime
-		recvTime, err := time.Parse(layout, order.RecvClientTime)
+		// 解析RecvClientTime
+		recvClientTime, err := time.Parse(layout, order.RecvClientTime)
 		if err != nil {
+			fmt.Printf("error parsing RecvClientTime for order %s: %v", order.ClOrderId, err)
 			return fmt.Errorf("error parsing RecvClientTime for order %s: %v", order.ClOrderId, err)
 		}
 
-		// 解析ReturnTime
-		returnTime, err := time.Parse(layout, order.FinalReturnTime)
+		// 解析SendMatchTime
+		sendMatchTime, err := time.Parse(layout, order.SendMatchTime)
 		if err != nil {
+			fmt.Printf("error parsing SendMatchTime for order %s: %v", order.ClOrderId, err)
+			return fmt.Errorf("error parsing SendMatchTime for order %s: %v", order.ClOrderId, err)
+		}
+
+		// 解析RecvMatchTime
+		recvMatchTime, err := time.Parse(layout, order.RecvMatchTime)
+		if err != nil {
+			fmt.Printf("error parsing RecvMatchTime for order %s: %v", order.ClOrderId, err)
+			return fmt.Errorf("error parsing RecvMatchTime for order %s: %v", order.ClOrderId, err)
+		}
+
+		// 解析FinalReturnTime
+		finalReturnTime, err := time.Parse(layout, order.FinalReturnTime)
+		if err != nil {
+			fmt.Printf("error parsing FinalReturnTime for order %s: %v", order.ClOrderId, err)
 			return fmt.Errorf("error parsing FinalReturnTime for order %s: %v", order.ClOrderId, err)
 		}
 
-		// 计算差值（以秒为单位）
-		duration := returnTime.Sub(recvTime).Seconds()
+		// 计算OmsCostTime1
+		order.OmsCostTime1 = fmt.Sprintf("%.6f", sendMatchTime.Sub(recvClientTime).Seconds())
+		// 计算MatchCostTime
+		order.MatchCostTime = fmt.Sprintf("%.6f", recvMatchTime.Sub(sendMatchTime).Seconds())
+		// 计算OmsCostTime2
+		order.OmsCostTime2 = fmt.Sprintf("%.6f", finalReturnTime.Sub(recvMatchTime).Seconds())
+		// 更新TotalCostTime
+		order.TotalCostTime = fmt.Sprintf("%.6f", finalReturnTime.Sub(recvClientTime).Seconds())
 
-		if order, exists := orders[i]; exists {
-			// 修改结构体字段
-			order.TotalCostTime = fmt.Sprintf("%.6f", duration)
-			orders[i] = order
-		}
+		// 更新map中的订单
+		orders[i] = order
 	}
 
 	return nil
@@ -278,6 +297,11 @@ func main() {
 
 	if fillSendTime(orders, logFilePath) != nil {
 		fmt.Printf("Error filling send time: %v\n", err)
+		return
+	}
+
+	if exportToJsonl(orders, "t1.jsonl") != nil {
+		fmt.Printf("Error exportToJsonl: %v\n", err)
 		return
 	}
 
