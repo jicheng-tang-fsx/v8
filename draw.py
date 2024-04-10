@@ -25,6 +25,13 @@ def plot_cost_millisecond(csv_file):
     plt.xlabel('Order Index')
     plt.ylabel('Cost Milliseconds')
     
+    # 在左上角添加时间成本解释
+    # 注意调整文本的位置以适应左上角
+    plt.text(0.02, 0.98, "OmsCostTime1: Delay in processing orders from clients.",
+             transform=plt.gca().transAxes, fontsize=10, color='blue', verticalalignment='top')
+    plt.text(0.02, 0.93, "OmsCostTime2: Delay in processing returns from the matching engine to clients.",
+             transform=plt.gca().transAxes, fontsize=10, color='red', verticalalignment='top')
+    
     # 保存图像为JPG，文件名与CSV文件同名
     output_file = csv_file.rsplit('.', 1)[0] + '.jpg'
     plt.savefig(output_file, format='jpg', dpi=150)
