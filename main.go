@@ -13,18 +13,21 @@ import (
 	"time"
 )
 
-var reTime, reClOrderId *regexp.Regexp
+var reTime, reClOrderId, reMatchOrderID *regexp.Regexp
 
 func init() {
 	reTime = regexp.MustCompile(`^D\d{4} (\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}\.\d{6})`)
 	reClOrderId = regexp.MustCompile(`\|11=([^|]+)\|`)
+	reMatchOrderID = regexp.MustCompile(`\|198=([^|]+)\|`)
 }
 
 type JnetConfirmedOrder struct {
-	ClOrderId  string
-	RecvTime   string
-	ReturnTime string
-	CostTime   string
+	ClOrderId     string
+	RecvTime      string
+	ReturnTime    string
+	SendMatchTime string
+	RecvMatchTime string
+	CostTime      string
 }
 
 func isJnetConfirmed(line string) bool {
@@ -136,6 +139,9 @@ func fillSendTime(orders map[string]JnetConfirmedOrder, filename string) error {
 					orders[clOrderIdMatches[1]] = order
 				}
 			}
+		}
+		if strings.Contains(line, "|35=D|") && strings.Contains(line, "|49=router_branch|") && strings.Contains(line, "|56=router_branch|") {
+			
 		}
 	}
 
