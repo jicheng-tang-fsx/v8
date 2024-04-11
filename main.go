@@ -303,7 +303,7 @@ func exportCsv(orders map[string]JnetConfirmedOrder, csvFilename string) error {
 
 func main() {
 	if len(os.Args) < 3 {
-		fmt.Println("Usage: <program> <logFilePath> <outputCsvPath>")
+		fmt.Println("Usage: <program> <logFilePath> <outputCsvPath> \nVersion: 0.0.1")
 		return
 	}
 	logFilePath := os.Args[1]
