@@ -13,16 +13,18 @@ import (
 	"time"
 )
 
-var reTime, reClOrderId, reMatchOrderID *regexp.Regexp
+var reTime, reClOrderId, reMatchOrderID, reAccount *regexp.Regexp
 
 func init() {
 	reTime = regexp.MustCompile(`^D\d{4} (\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}\.\d{6})`)
 	reClOrderId = regexp.MustCompile(`\|11=([^|]+)\|`)
 	reMatchOrderID = regexp.MustCompile(`\|198=([^|]+)\|`)
+	reAccount = regexp.MustCompile(`\|1=([^|]+)\|`)
 }
 
 type JnetConfirmedOrder struct {
 	ClOrderId       string
+	Account         string
 	RecvClientTime  string
 	SendMatchTime   string
 	RecvMatchTime   string
@@ -45,18 +47,26 @@ func isJnetConfirmed(line string) bool {
 func parseLine(line string) (JnetConfirmedOrder, error) {
 	returnTimeMatches := reTime.FindStringSubmatch(line)
 	clOrderIdMatches := reClOrderId.FindStringSubmatch(line)
+	accountMatches := reAccount.FindStringSubmatch(line)
 
 	order := JnetConfirmedOrder{}
 
 	if len(returnTimeMatches) > 1 {
 		order.FinalReturnTime = returnTimeMatches[1]
 	} else {
-		return JnetConfirmedOrder{}, fmt.Errorf("FinalReturnTime not found")
+		return JnetConfirmedOrder{}, fmt.Errorf("finalReturnTime not found")
 	}
+
 	if len(clOrderIdMatches) > 1 {
 		order.ClOrderId = clOrderIdMatches[1]
 	} else {
-		return JnetConfirmedOrder{}, fmt.Errorf("ClOrderId not found")
+		return JnetConfirmedOrder{}, fmt.Errorf("clOrderId not found")
+	}
+
+	if len(accountMatches) > 1 {
+		order.Account = accountMatches[1]
+	} else {
+		return JnetConfirmedOrder{}, fmt.Errorf("account not found")
 	}
 
 	return order, nil
@@ -241,7 +251,7 @@ func exportCsv(orders map[string]JnetConfirmedOrder, csvFilename string) error {
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	if err := writer.Write([]string{"ClientOrderID", "OmsCostTime1", "MatchCostTime", "OmsCostTime2", "TotalCostTime"}); err != nil {
+	if err := writer.Write([]string{"Account", "ClientOrderID", "OmsCostTime1", "MatchCostTime", "OmsCostTime2", "TotalCostTime"}); err != nil {
 		return fmt.Errorf("error writing header to CSV file: %v", err)
 	}
 
@@ -259,7 +269,7 @@ func exportCsv(orders map[string]JnetConfirmedOrder, csvFilename string) error {
 	// 假设writer是已经被初始化的csv.Writer
 	for _, order := range orderSlice {
 		// 准备要写入CSV的记录
-		record := []string{order.ClOrderId}
+		record := []string{order.Account, order.ClOrderId}
 
 		// 需要转换和格式化的字段
 		timeFields := []string{order.OmsCostTime1, order.MatchCostTime, order.OmsCostTime2, order.TotalCostTime}
