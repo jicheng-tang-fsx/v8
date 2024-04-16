@@ -1,43 +1,38 @@
-import jsonlines
+import pandas as pd
 import matplotlib.pyplot as plt
 import sys
-import os
 
-# 从命令行参数获取JSONL文件路径
-def get_jsonl_file_path():
-    if len(sys.argv) != 2:
-        print("Usage: python script.py <jsonl_file>")
-        sys.exit(1)
-    return sys.argv[1]
+def read_and_plot(file_name):
+    # Read the JSONL data into a DataFrame
+    df = pd.read_json(file_name, lines=True)
 
-# 读取JSONL文件并计算订单数量的变化
-def process_jsonl_file(file_path):
-    order_changes = []
-    with jsonlines.open(file_path) as reader:
-        order_count = 0
-        for obj in reader:
-            if obj["OrderType"] == "New":
-                order_count += 1
-            elif obj["OrderType"] == "Cancel":
-                order_count -= 1
-            order_changes.append(order_count)
-    return order_changes
+    # Assign numerical values to order types for calculation: +1 for New, -1 for Cancel
+    df['OrderChange'] = df['OrderType'].map({'New': 1, 'Cancel': -1})
 
-# 绘制折线图并保存为同名的jpg文件
-def plot_order_changes(order_changes, file_path):
-    plt.plot(range(1, len(order_changes) + 1), order_changes, marker='o', linestyle='-')
-    plt.xlabel('Order Number')
-    plt.ylabel('Orders on Order Book')
-    plt.title('Order Book Dynamics')
-    plt.grid(True)
-    plt.savefig(os.path.splitext(file_path)[0] + "_num.jpg")
-    plt.close()
+    # Calculate the cumulative sum to reflect the running total of active orders
+    df['CumulativeOrders'] = df['OrderChange'].cumsum()
 
-# 主函数
-def main():
-    file_path = get_jsonl_file_path()
-    order_changes = process_jsonl_file(file_path)
-    plot_order_changes(order_changes, file_path)
+    # Plot the data
+    plt.figure(figsize=(10, 5))
+    plt.plot(df['LogTime'], df['CumulativeOrders'], marker='o', linestyle='-', color='b')
+    plt.title('Change in Order Numbers Over Time')
+    plt.xlabel('Time')  # Set x-axis label to 'Time'
+    plt.ylabel('Cumulative Order Changes')
+
+    # Remove all x-axis tick labels (date and time values) and set a general label
+    plt.xticks([])  # This removes all x-axis tick marks and labels
+
+    plt.grid(True)  # Enable grid for easier visual alignment
+    plt.tight_layout()  # Adjust layout to make sure everything fits without overlap
+
+    # Save the plot as a JPG file with the same name as the input file
+    output_file_name = file_name.rsplit('.', 1)[0] + '_num.jpg'
+    plt.savefig(output_file_name)
+    print(f"Plot saved as {output_file_name}")
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) < 2:
+        print("Usage: python script_name.py <filename>")
+    else:
+        file_name = sys.argv[1]
+        read_and_plot(file_name)
