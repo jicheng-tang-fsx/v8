@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+// grep "150=G" matching_engine_20240414.log | grep "send" | grep -e "56=FT" -e "56=HRT" > 150G.log
+
 var reTime, reClOrderId, reAccount, reSymbol, reOrderType, reExecID *regexp.Regexp
 
 func init() {
