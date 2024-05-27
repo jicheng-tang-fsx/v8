@@ -23,16 +23,18 @@ func init() {
 }
 
 type JnetConfirmedOrder struct {
-	ClOrderId       string
-	Account         string
-	RecvClientTime  string
-	SendMatchTime   string
-	RecvMatchTime   string
-	FinalReturnTime string
+	ClOrderId            string
+	Account              string
+	RecvClientTime       string
+	SendMatchTime        string
+	RecvMatchFillTime    string
+	RecvMatchCorrectTime string
+	FinalReturnTime      string
 
 	OmsCostTime1  string
 	MatchCostTime string
 	OmsCostTime2  string
+	JnetCostTime  string
 
 	TotalCostTime string
 }
@@ -169,14 +171,27 @@ func fillSendTime(orders map[string]JnetConfirmedOrder, filename string) error {
 			}
 		}
 
+		if strings.Contains(line, "|150=2|") && strings.Contains(line, "|49=exch_sim|") && strings.Contains(line, "|56=router_branch|") {
+			matchOrderIDResults := reMatchOrderID.FindStringSubmatch(line)
+			timeMatches := reTime.FindStringSubmatch(line)
+			if len(matchOrderIDResults) > 1 && len(timeMatches) > 1 {
+				order, exists := orders[matchOrderIDResults[1]]
+				if exists && order.RecvMatchFillTime == "" {
+					// 修改结构体字段
+					order.RecvMatchFillTime = timeMatches[1]
+					orders[matchOrderIDResults[1]] = order
+				}
+			}
+		}
+
 		if strings.Contains(line, "|150=G|") && strings.Contains(line, "|49=exch_sim|") && strings.Contains(line, "|56=router_branch|") {
 			matchOrderIDResults := reMatchOrderID.FindStringSubmatch(line)
 			timeMatches := reTime.FindStringSubmatch(line)
 			if len(matchOrderIDResults) > 1 && len(timeMatches) > 1 {
 				order, exists := orders[matchOrderIDResults[1]]
-				if exists && order.RecvMatchTime == "" {
+				if exists && order.RecvMatchCorrectTime == "" {
 					// 修改结构体字段
-					order.RecvMatchTime = timeMatches[1]
+					order.RecvMatchCorrectTime = timeMatches[1]
 					orders[matchOrderIDResults[1]] = order
 				}
 			}
@@ -211,11 +226,18 @@ func fillCostTime(orders map[string]JnetConfirmedOrder) error {
 			return fmt.Errorf("error parsing SendMatchTime for order %s: %v", order.ClOrderId, err)
 		}
 
-		// 解析RecvMatchTime
-		recvMatchTime, err := time.Parse(layout, order.RecvMatchTime)
+		// 解析RecvMatchFillTime
+		RecvMatchFillTime, err := time.Parse(layout, order.RecvMatchFillTime)
 		if err != nil {
-			fmt.Printf("error parsing RecvMatchTime for order %s: %v", order.ClOrderId, err)
-			return fmt.Errorf("error parsing RecvMatchTime for order %s: %v", order.ClOrderId, err)
+			fmt.Printf("error parsing RecvMatchFillTime for order %s: %v", order.ClOrderId, err)
+			return fmt.Errorf("error parsing RecvMatchFillTime for order %s: %v", order.ClOrderId, err)
+		}
+
+		// 解析RecvMatchCorrectTime
+		RecvMatchCorrectTime, err := time.Parse(layout, order.RecvMatchCorrectTime)
+		if err != nil {
+			fmt.Printf("error parsing RecvMatchCorrectTime for order %s: %v", order.ClOrderId, err)
+			return fmt.Errorf("error parsing RecvMatchCorrectTime for order %s: %v", order.ClOrderId, err)
 		}
 
 		// 解析FinalReturnTime
@@ -228,9 +250,11 @@ func fillCostTime(orders map[string]JnetConfirmedOrder) error {
 		// 计算OmsCostTime1
 		order.OmsCostTime1 = fmt.Sprintf("%.6f", sendMatchTime.Sub(recvClientTime).Seconds())
 		// 计算MatchCostTime
-		order.MatchCostTime = fmt.Sprintf("%.6f", recvMatchTime.Sub(sendMatchTime).Seconds())
+		order.MatchCostTime = fmt.Sprintf("%.6f", RecvMatchFillTime.Sub(sendMatchTime).Seconds())
 		// 计算OmsCostTime2
-		order.OmsCostTime2 = fmt.Sprintf("%.6f", finalReturnTime.Sub(recvMatchTime).Seconds())
+		order.OmsCostTime2 = fmt.Sprintf("%.6f", finalReturnTime.Sub(RecvMatchCorrectTime).Seconds())
+		// 计算JnetCostTime
+		order.JnetCostTime = fmt.Sprintf("%.6f", RecvMatchCorrectTime.Sub(RecvMatchFillTime).Seconds())
 		// 更新TotalCostTime
 		order.TotalCostTime = fmt.Sprintf("%.6f", finalReturnTime.Sub(recvClientTime).Seconds())
 
@@ -251,7 +275,7 @@ func exportCsv(orders map[string]JnetConfirmedOrder, csvFilename string) error {
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	if err := writer.Write([]string{"Account", "ClientOrderID", "OmsCostTime1", "MatchCostTime", "OmsCostTime2", "TotalCostTime"}); err != nil {
+	if err := writer.Write([]string{"Account", "ClientOrderID", "OmsCostTime1", "MatchCostTime", "OmsCostTime2", "JnetCostTime", "TotalCostTime"}); err != nil {
 		return fmt.Errorf("error writing header to CSV file: %v", err)
 	}
 
@@ -272,7 +296,7 @@ func exportCsv(orders map[string]JnetConfirmedOrder, csvFilename string) error {
 		record := []string{order.Account, order.ClOrderId}
 
 		// 需要转换和格式化的字段
-		timeFields := []string{order.OmsCostTime1, order.MatchCostTime, order.OmsCostTime2, order.TotalCostTime}
+		timeFields := []string{order.OmsCostTime1, order.MatchCostTime, order.OmsCostTime2, order.JnetCostTime, order.TotalCostTime}
 
 		// 遍历每个时间字段进行处理
 		for _, field := range timeFields {
@@ -303,11 +327,14 @@ func exportCsv(orders map[string]JnetConfirmedOrder, csvFilename string) error {
 
 func main() {
 	if len(os.Args) < 3 {
-		fmt.Println("Usage: <program> <logFilePath> <outputCsvPath> \nVersion: 0.0.1")
+		fmt.Println("Usage: <program> <logFilePath> <outputCsvPath> \nVersion: 0.0.2")
 		return
 	}
 	logFilePath := os.Args[1]
 	outputCsvPath := os.Args[2]
+
+	// logFilePath := "/home/jicheng.tang/work/v8/oms_20240517.log"
+	// outputCsvPath := "./v8-20240517-3.csv"
 
 	orders, err := getAllJnetConfirmedOrder(logFilePath)
 	if err != nil {
@@ -320,11 +347,6 @@ func main() {
 		return
 	}
 
-	// if exportToJsonl(orders, "t1.jsonl") != nil {
-	// 	fmt.Printf("Error exportToJsonl: %v\n", err)
-	// 	return
-	// }
-
 	if fillCostTime(orders) != nil {
 		fmt.Printf("Error filling cost time: %v\n", err)
 		return
@@ -334,6 +356,10 @@ func main() {
 		fmt.Printf("Error exporting to CSV: %v\n", err)
 		return
 	}
+	// if exportToJsonl(orders, "abc.jsonl") != nil {
+	// 	fmt.Printf("Error exportToJsonl: %v\n", err)
+	// 	return
+	// }
 
 	fmt.Println("Orders exported successfully to", outputCsvPath)
 }
